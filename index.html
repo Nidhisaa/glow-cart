@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="GlowCart - Premium glassmorphic e-commerce store with vibrant colorful cyber tech accessories and glowing ambient electronics.">
+  <title>GlowCart | Premium Cyber E-Commerce Store</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Toast Notification Stack -->
+  <div id="toast-container"></div>
+
+  <!-- Sticky Glassmorphic Header Navbar -->
+  <header class="glass">
+    <div class="header-container">
+      <!-- Logo -->
+      <div class="logo-section" onclick="app.viewCatalog()">
+        GlowCart<span class="logo-dot"></span>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="search-bar-container">
+        <svg viewBox="0 0 24 24">
+          <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+        </svg>
+        <input type="text" id="search-input" placeholder="Search glowing gear...">
+      </div>
+
+      <!-- Navigation Actions -->
+      <div class="nav-actions">
+        <!-- Admin Dashboard Tab (Hidden initially, shown for admin role) -->
+        <button id="nav-admin-tab" class="nav-btn" onclick="app.viewAdmin()" style="display: none; border-color: var(--clr-warning);">
+          <span class="admin-badge">Admin</span>
+        </button>
+
+        <!-- Orders link -->
+        <button class="nav-btn" onclick="app.viewOrders()">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+          </svg>
+          Orders
+        </button>
+
+        <!-- Auth button -->
+        <button id="nav-auth-btn" class="nav-btn" onclick="app.openAuthModal()">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+          </svg>
+          Login
+        </button>
+
+        <!-- Cart drawer trigger -->
+        <button class="nav-btn cart-icon-wrapper" onclick="app.openCart()">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/>
+          </svg>
+          Cart
+          <span id="cart-badge" class="cart-count" style="display: none;">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sub-header Categories Filter Bar -->
+  <div id="categories-bar-container" class="categories-bar">
+    <button class="category-tab active" onclick="app.selectCategory('All', this)">All</button>
+    <button class="category-tab" onclick="app.selectCategory('Keyboards', this)">Keyboards</button>
+    <button class="category-tab" onclick="app.selectCategory('Audio', this)">Audio</button>
+    <button class="category-tab" onclick="app.selectCategory('Wearables', this)">Wearables</button>
+    <button class="category-tab" onclick="app.selectCategory('Smart Home', this)">Smart Home</button>
+  </div>
+
+  <!-- Main View Container -->
+  <main>
+    <!-- Hero Banner (Shows on shop catalog by default) -->
+    <div id="hero-banner-container" class="hero-banner glass" style="margin-bottom: 2rem;">
+      <div class="hero-content">
+        <span class="hero-tagline">Vibrant Cyber Gear</span>
+        <h1 class="hero-title">Step Into the <span>Future of Retail</span></h1>
+        <p class="hero-description">Experience beautiful glassmorphism design. Explore our collection of hand-picked glowing electronics, custom mechanical hardware, and ambient smart decor designed to elevate your workspace.</p>
+        <button class="hero-cta" onclick="app.clearSearchAndFilters(); document.getElementById('search-input').focus();">Browse Glowing Gear</button>
+      </div>
+      <div class="hero-image-wrapper">
+        <img class="hero-img" src="assets/hero_banner.jpg" alt="Futuristic Desk setup">
+      </div>
+    </div>
+
+    <!-- Sorting bar -->
+    <div id="sorting-bar-container" class="sorting-bar" style="margin-bottom: 1.5rem;">
+      <div id="results-count-text" class="results-count">8 product(s) found</div>
+      <div>
+        <label for="sort-select" style="font-size: 0.9rem; color: var(--text-dim); margin-right: 0.5rem;">Sort by:</label>
+        <select id="sort-select" class="sort-select" onchange="app.selectSort(this.value)">
+          <option value="default">Default</option>
+          <option value="price-low">Price: Low to High</option>
+          <option value="price-high">Price: High to Low</option>
+          <option value="rating">Rating: Highest First</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Dynamic view content -->
+    <div id="main-content">
+      <!-- Dynamic views render here -->
+    </div>
+  </main>
+
+  <!-- Slide-out Cart Drawer Overlay -->
+  <div id="drawer-overlay" class="drawer-overlay" onclick="app.closeCart()"></div>
+  <div id="cart-drawer" class="cart-drawer glass">
+    <div class="cart-drawer-header">
+      <div class="cart-drawer-title">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/>
+        </svg>
+        Shopping Cart
+      </div>
+      <button class="cart-drawer-close" onclick="app.closeCart()">×</button>
+    </div>
+    <!-- Cart Scroll Content -->
+    <div id="cart-drawer-content" class="cart-drawer-content">
+      <!-- Cart Items render dynamically -->
+    </div>
+    <!-- Cart Totals Footer -->
+    <div class="cart-drawer-footer">
+      <div class="cart-summary-line">
+        <span>Subtotal</span>
+        <span id="cart-drawer-subtotal">$0.00</span>
+      </div>
+      <div class="cart-summary-line" id="cart-drawer-discount-row" style="display: none; color: var(--clr-accent-2);">
+        <span>Discount (20%)</span>
+        <span id="cart-drawer-discount">-$0.00</span>
+      </div>
+      <div class="cart-summary-line">
+        <span>Estimated Tax (8%)</span>
+        <span id="cart-drawer-tax">$0.00</span>
+      </div>
+      <div class="cart-total-line">
+        <span>Total</span>
+        <span id="cart-drawer-total">$0.00</span>
+      </div>
+      <button class="btn-checkout" onclick="app.closeCart(); app.viewCheckout();">Proceed to Checkout</button>
+    </div>
+  </div>
+
+  <!-- Authentication Tab/Overlay Modal -->
+  <div id="auth-modal" class="modal-overlay">
+    <!-- Auth markup injected dynamically -->
+  </div>
+
+  <!-- Admin CRUD Modal Form -->
+  <div id="admin-modal" class="modal-overlay">
+    <!-- Admin form injected dynamically -->
+  </div>
+
+  <!-- Core Scripts -->
+  <script src="js/products.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
