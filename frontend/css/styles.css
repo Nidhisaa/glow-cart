@@ -547,12 +547,6 @@ main {
   color: var(--clr-accent-1);
 }
 
-.product-card-price::before {
-  content: '$';
-  font-size: 0.95rem;
-  margin-right: 2px;
-}
-
 .btn-add-cart {
   background: linear-gradient(135deg, var(--clr-primary), var(--clr-secondary));
   color: white;
@@ -721,11 +715,6 @@ main {
   color: var(--clr-accent-1);
   font-weight: 700;
   font-size: 1rem;
-}
-
-.cart-item-price::before {
-  content: '$';
-  font-size: 0.8rem;
 }
 
 .cart-item-actions {
@@ -1000,13 +989,6 @@ main {
   font-weight: 800;
   color: var(--text-main);
   margin-bottom: 1.2rem;
-}
-
-.detail-price::before {
-  content: '$';
-  font-size: 1.4rem;
-  color: var(--clr-accent-1);
-  margin-right: 3px;
 }
 
 .detail-desc {

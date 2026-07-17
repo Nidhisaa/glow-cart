@@ -216,7 +216,7 @@ function renderCheckout(cartItems, subtotal, discount, tax, total) {
         <span class="checkout-item-qty">${item.quantity}x</span>
         <span>${item.name}</span>
       </div>
-      <span>$${(item.price * item.quantity).toFixed(2)}</span>
+      <span>${formatPrice(item.price * item.quantity)}</span>
     </div>
   `).join('');
 
