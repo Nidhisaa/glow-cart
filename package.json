@@ -1,0 +1,17 @@
+{
+  "name": "glow-cart-app",
+  "version": "1.0.0",
+  "description": "Full-Stack GlowCart application (HTML/CSS/JS + Node.js + Express + MySQL)",
+  "scripts": {
+    "setup": "cd backend && npm install",
+    "start": "node backend/server.js",
+    "dev": "cd backend && npm run dev"
+  },
+  "keywords": [
+    "full-stack",
+    "glassmorphism",
+    "cyberpunk",
+    "ecommerce"
+  ],
+  "author": "Nidhisaa"
+}

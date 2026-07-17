@@ -1,4 +1,4 @@
-// app.js - Central State Controller and Interactive Routing
+// frontend/js/app.js - Central State Controller and Interactive Routing (Full-Stack Version)
 
 class GlowCartApp {
   constructor() {
@@ -9,8 +9,7 @@ class GlowCartApp {
       searchQuery: '',           // filter
       sortBy: 'default',         // 'default' | 'price-low' | 'price-high' | 'rating'
       cart: [],                  // { productId, name, price, image, quantity }
-      user: null,                // { email, role: 'user' | 'admin' }
-      orders: [],                // order history
+      user: null,                // { email, role: 'user' | 'admin', name }
       promoApplied: false,
       detailQty: 1
     };
@@ -19,20 +18,16 @@ class GlowCartApp {
     window.addEventListener('DOMContentLoaded', () => this.init());
   }
 
-  init() {
-    // Restore states from Local Storage
+  async init() {
+    // Restore states from Local Storage (Sessions & Cart)
     this.restoreUser();
     this.restoreCart();
-    this.restoreOrders();
-
-    // Set initial product database if not existing
-    getProducts(); // triggers initialization in products.js if empty
 
     // Attach Event Listeners
     this.setupGlobalListeners();
 
-    // Start background simulation for tracking orders status
-    this.startOrderStatusSimulator();
+    // Start background poller to refresh order statuses from backend
+    this.startOrdersPoller();
 
     // Render Initial View
     this.navigate(this.state.view);
@@ -52,13 +47,6 @@ class GlowCartApp {
     if (saved) {
       this.state.cart = JSON.parse(saved);
       this.updateCartBadge();
-    }
-  }
-
-  restoreOrders() {
-    const saved = localStorage.getItem('glowcart_orders');
-    if (saved) {
-      this.state.orders = JSON.parse(saved);
     }
   }
 
@@ -160,9 +148,11 @@ class GlowCartApp {
   }
 
   // Renders
-  renderCatalog() {
+  async renderCatalog() {
     const mainContent = document.getElementById('main-content');
-    let products = getProducts();
+    mainContent.innerHTML = '<div style="text-align:center; padding:3rem; color:var(--text-dim);">Loading Shop Catalog...</div>';
+    
+    let products = await getProducts();
 
     // Category Filter
     if (this.state.category !== 'All') {
@@ -201,9 +191,11 @@ class GlowCartApp {
     }
   }
 
-  renderDetails() {
+  async renderDetails() {
     const mainContent = document.getElementById('main-content');
-    const product = getProductById(this.state.selectedProductId);
+    mainContent.innerHTML = '<div style="text-align:center; padding:3rem; color:var(--text-dim);">Loading Product Specifications...</div>';
+    
+    const product = await getProductById(this.state.selectedProductId);
     if (!product) {
       this.showToast('Product not found.', 'danger');
       this.navigate('catalog');
@@ -232,33 +224,54 @@ class GlowCartApp {
     );
   }
 
-  renderOrdersView() {
+  async renderOrdersView() {
     const mainContent = document.getElementById('main-content');
+    mainContent.innerHTML = '<div style="text-align:center; padding:3rem; color:var(--text-dim);">Fetching Order History...</div>';
     
-    // Filter orders by logged in user email (if guest, shows guest orders)
+    // Fetch orders from API
     const userEmail = this.state.user ? this.state.user.email : 'guest';
-    const userOrders = this.state.orders.filter(o => o.userEmail === userEmail);
+    const role = this.state.user ? this.state.user.role : 'user';
     
-    mainContent.innerHTML = renderOrders(userOrders);
+    try {
+      const response = await fetch(`/api/orders?email=${userEmail}&role=${role}`);
+      if (!response.ok) throw new Error('Failed to fetch orders');
+      const orders = await response.json();
+      mainContent.innerHTML = renderOrders(orders);
+    } catch (error) {
+      console.error(error);
+      mainContent.innerHTML = `<div style="text-align:center; padding:3rem; color:var(--clr-danger);">Error: Could not retrieve order details.</div>`;
+    }
   }
 
-  renderAdminView() {
+  async renderAdminView() {
     const mainContent = document.getElementById('main-content');
-    const products = getProducts();
+    mainContent.innerHTML = '<div style="text-align:center; padding:3rem; color:var(--text-dim);">Loading Dashboard Metrics...</div>';
+    
+    const products = await getProducts();
 
-    // Compute stats
-    const totalRevenue = this.state.orders
-      .filter(o => o.status === 'Delivered')
-      .reduce((sum, o) => sum + o.totals.total, 0);
+    try {
+      // Fetch all orders to compute stats
+      const userEmail = this.state.user ? this.state.user.email : '';
+      const response = await fetch(`/api/orders?email=${userEmail}&role=admin`);
+      if (!response.ok) throw new Error('Failed to fetch admin metrics');
+      const orders = await response.json();
 
-    const stats = {
-      revenue: totalRevenue,
-      productsCount: products.length,
-      ordersCount: this.state.orders.length,
-      outOfStockCount: products.filter(p => p.stock <= 0).length
-    };
+      const totalRevenue = orders
+        .filter(o => o.status === 'Delivered')
+        .reduce((sum, o) => sum + o.totals.total, 0);
 
-    mainContent.innerHTML = renderAdminDashboard(products, stats);
+      const stats = {
+        revenue: totalRevenue,
+        productsCount: products.length,
+        ordersCount: orders.length,
+        outOfStockCount: products.filter(p => p.stock <= 0).length
+      };
+
+      mainContent.innerHTML = renderAdminDashboard(products, stats);
+    } catch (error) {
+      console.error(error);
+      mainContent.innerHTML = `<div style="text-align:center; padding:3rem; color:var(--clr-danger);">Error: Could not load administrator panel.</div>`;
+    }
   }
 
   // Catalog Category Filters Tab Changer
@@ -292,7 +305,7 @@ class GlowCartApp {
       if (t.innerText.trim() === 'All') {
         t.classList.add('active');
       } else {
-        t.classList.remove('remove');
+        t.classList.remove('active');
       }
     });
 
@@ -303,8 +316,8 @@ class GlowCartApp {
   }
 
   // Detail Quantity Select Actions
-  changeDetailQty(delta) {
-    const product = getProductById(this.state.selectedProductId);
+  async changeDetailQty(delta) {
+    const product = await getProductById(this.state.selectedProductId);
     const cartItem = this.state.cart.find(c => c.productId === product.id);
     const cartQty = cartItem ? cartItem.quantity : 0;
     const maxAvailable = product.stock - cartQty;
@@ -339,15 +352,15 @@ class GlowCartApp {
     }
   }
 
-  addDetailQtyToCart(productId) {
-    this.addToCart(productId, this.state.detailQty);
+  async addDetailQtyToCart(productId) {
+    await this.addToCart(productId, this.state.detailQty);
     // Refresh details page state
     this.navigate('details', productId);
   }
 
   // Cart Operations
-  addToCart(productId, quantity) {
-    const product = getProductById(productId);
+  async addToCart(productId, quantity) {
+    const product = await getProductById(productId);
     if (!product) return;
 
     if (product.stock <= 0) {
@@ -381,8 +394,8 @@ class GlowCartApp {
     this.showToast(`Added ${quantity}x ${product.name} to Cart.`, 'success');
   }
 
-  updateCartQty(productId, newQuantity) {
-    const product = getProductById(productId);
+  async updateCartQty(productId, newQuantity) {
+    const product = await getProductById(productId);
     if (!product) return;
 
     if (newQuantity <= 0) {
@@ -534,7 +547,7 @@ class GlowCartApp {
     document.getElementById('preview-card-cvv').innerText = cleaned || '•••';
   }
 
-  processCheckout(e) {
+  async processCheckout(e) {
     e.preventDefault();
 
     // Perform validation and loading state simulation
@@ -545,10 +558,9 @@ class GlowCartApp {
     const newOrder = {
       id: nextOrderId,
       userEmail: this.state.user ? this.state.user.email : 'guest',
-      date: new Date().toISOString(),
-      items: [...this.state.cart],
       totals: totals,
       status: 'Processing',
+      items: [...this.state.cart],
       shippingDetails: {
         firstName: document.getElementById('ship-fname').value,
         lastName: document.getElementById('ship-lname').value,
@@ -558,56 +570,53 @@ class GlowCartApp {
       }
     };
 
-    // Reduce product stock in local storage
-    const products = getProducts();
-    newOrder.items.forEach(cartItem => {
-      const dbProduct = products.find(p => p.id === cartItem.productId);
-      if (dbProduct) {
-        dbProduct.stock = Math.max(0, dbProduct.stock - cartItem.quantity);
-      }
-    });
-    saveProducts(products);
-
-    // Save order
-    this.state.orders.unshift(newOrder);
-    localStorage.setItem('glowcart_orders', JSON.stringify(this.state.orders));
-
-    // Clear cart
-    this.state.cart = [];
-    this.state.promoApplied = false;
-    this.saveCart();
-
-    this.showToast('Payment Authorized. Order placed!', 'success');
-
-    // Route to receipt success screen
-    const mainContent = document.getElementById('main-content');
-    mainContent.innerHTML = renderOrderSuccess(newOrder);
-  }
-
-  // Order Status Tracking Simulator (Advance status every 45 seconds/minutes, mock trigger)
-  startOrderStatusSimulator() {
-    setInterval(() => {
-      let modified = false;
-      const statuses = ['Processing', 'Shipped', 'Out for Delivery', 'Delivered'];
-      
-      this.state.orders.forEach(order => {
-        const curIndex = statuses.indexOf(order.status);
-        if (curIndex !== -1 && curIndex < statuses.length - 1) {
-          // 30% chance to advance status in background
-          if (Math.random() < 0.3) {
-            order.status = statuses[curIndex + 1];
-            modified = true;
-          }
-        }
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newOrder)
       });
 
-      if (modified) {
-        localStorage.setItem('glowcart_orders', JSON.stringify(this.state.orders));
-        if (this.state.view === 'orders') {
-          this.renderOrdersView();
+      if (!response.ok) throw new Error('Failed to record transaction');
+
+      // Clear cart
+      this.state.cart = [];
+      this.state.promoApplied = false;
+      this.saveCart();
+
+      this.showToast('Payment Authorized. Order placed!', 'success');
+
+      // Route to receipt success screen
+      const mainContent = document.getElementById('main-content');
+      mainContent.innerHTML = renderOrderSuccess(newOrder);
+    } catch (error) {
+      this.showToast(`Checkout Error: ${error.message}`, 'danger');
+    }
+  }
+
+  // Order status poller (updates status lists dynamically in the background)
+  startOrdersPoller() {
+    setInterval(async () => {
+      // If user is currently looking at their orders list, pull new status from server
+      if (this.state.view === 'orders') {
+        const mainContent = document.getElementById('main-content');
+        const userEmail = this.state.user ? this.state.user.email : 'guest';
+        const role = this.state.user ? this.state.user.role : 'user';
+
+        try {
+          const response = await fetch(`/api/orders?email=${userEmail}&role=${role}`);
+          if (response.ok) {
+            const orders = await response.json();
+            // Don't redraw entire screen if user is scrolling, but this is a demo, so updating is clean
+            mainContent.innerHTML = renderOrders(orders);
+          }
+        } catch (err) {
+          console.error('Poller error:', err);
         }
       }
-    }, 15000); // Check every 15 seconds
+    }, 15000); // Poll every 15 seconds
   }
 
   // Authentication Flow
@@ -712,60 +721,82 @@ class GlowCartApp {
     }
   }
 
-  handleLogin(e) {
+  async handleLogin(e) {
     e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
-    const pass = document.getElementById('login-password').value;
+    const password = document.getElementById('login-password').value;
 
-    this.performLogin(email, pass);
+    await this.performLogin(email, password);
   }
 
-  performLogin(email, password) {
-    let role = 'user';
-    if (email === 'admin@glowcart.com' && password === 'admin123') {
-      role = 'admin';
-    } else if (email === 'user@glowcart.com' && password === 'user123') {
-      role = 'user';
-    } else {
-      // Allow any login for convenience in demo
-      role = 'user';
-    }
+  async performLogin(email, password) {
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
 
-    this.state.user = { email, role };
-    localStorage.setItem('glowcart_user', JSON.stringify(this.state.user));
-    
-    this.updateNavbarAuthUI();
-    this.closeAuthModal();
-    this.showToast(`Logged in successfully as ${role === 'admin' ? 'Admin' : email}`, 'success');
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Authentication failed');
+      }
 
-    // If logged in as admin, route to admin, else refresh orders list
-    if (role === 'admin') {
-      this.navigate('admin');
-    } else {
-      if (this.state.view === 'orders') {
-        this.renderOrdersView();
+      const sessionUser = await response.json();
+      this.state.user = sessionUser;
+      localStorage.setItem('glowcart_user', JSON.stringify(this.state.user));
+      
+      this.updateNavbarAuthUI();
+      this.closeAuthModal();
+      this.showToast(`Welcome back, ${sessionUser.name}!`, 'success');
+
+      if (sessionUser.role === 'admin') {
+        this.navigate('admin');
       } else {
         this.navigate('catalog');
       }
+    } catch (error) {
+      this.showToast(error.message, 'danger');
     }
   }
 
-  quickLogin(email, pass) {
-    this.performLogin(email, pass);
+  async quickLogin(email, pass) {
+    await this.performLogin(email, pass);
   }
 
-  handleRegister(e) {
+  async handleRegister(e) {
     e.preventDefault();
     const name = document.getElementById('reg-name').value.trim();
     const email = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
 
-    this.state.user = { email, role: 'user', name };
-    localStorage.setItem('glowcart_user', JSON.stringify(this.state.user));
-    
-    this.updateNavbarAuthUI();
-    this.closeAuthModal();
-    this.showToast(`Account created! Welcome, ${name}.`, 'success');
-    this.navigate('catalog');
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name, email, password })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Registration failed');
+      }
+
+      const sessionUser = await response.json();
+      this.state.user = sessionUser;
+      localStorage.setItem('glowcart_user', JSON.stringify(this.state.user));
+      
+      this.updateNavbarAuthUI();
+      this.closeAuthModal();
+      this.showToast(`Account created! Welcome, ${sessionUser.name}.`, 'success');
+      this.navigate('catalog');
+    } catch (error) {
+      this.showToast(error.message, 'danger');
+    }
   }
 
   handleLogout() {
@@ -783,7 +814,7 @@ class GlowCartApp {
     if (this.state.user) {
       if (authBtn) {
         authBtn.innerHTML = `
-          <span>👤 ${this.state.user.role === 'admin' ? 'Admin' : this.state.user.email.split('@')[0]}</span>
+          <span>👤 ${this.state.user.name.split(' ')[0]}</span>
           <button class="qty-btn" onclick="event.stopPropagation(); app.handleLogout();" style="margin-left:5px; font-size:0.75rem; width:18px; height:18px; display:inline-flex;" title="Logout">✖</button>
         `;
       }
@@ -874,8 +905,8 @@ class GlowCartApp {
     }
   }
 
-  openEditProductModal(productId) {
-    const product = getProductById(productId);
+  async openEditProductModal(productId) {
+    const product = await getProductById(productId);
     if (!product) return;
 
     const modal = document.getElementById('admin-modal');
@@ -946,7 +977,7 @@ class GlowCartApp {
     if (modal) modal.classList.remove('active');
   }
 
-  handleAddProduct(e) {
+  async handleAddProduct(e) {
     e.preventDefault();
     const name = document.getElementById('prod-name').value;
     const category = document.getElementById('prod-category').value;
@@ -955,13 +986,17 @@ class GlowCartApp {
     const image = document.getElementById('prod-image').value;
     const description = document.getElementById('prod-desc').value;
 
-    addProduct({ name, category, price, stock, image, description });
-    this.showToast(`Created new product: ${name}`, 'success');
-    this.closeAdminModal();
-    this.renderAdminView();
+    try {
+      await addProduct({ name, category, price, stock, image, description });
+      this.showToast(`Created new product: ${name}`, 'success');
+      this.closeAdminModal();
+      this.renderAdminView();
+    } catch (err) {
+      this.showToast(err.message, 'danger');
+    }
   }
 
-  handleEditProduct(e, productId) {
+  async handleEditProduct(e, productId) {
     e.preventDefault();
     const name = document.getElementById('edit-name').value;
     const category = document.getElementById('edit-category').value;
@@ -970,20 +1005,28 @@ class GlowCartApp {
     const image = document.getElementById('edit-image').value;
     const description = document.getElementById('edit-desc').value;
 
-    updateProduct(productId, { name, category, price, stock, image, description });
-    this.showToast(`Updated product: ${name}`, 'success');
-    this.closeAdminModal();
-    this.renderAdminView();
+    try {
+      await updateProduct(productId, { name, category, price, stock, image, description });
+      this.showToast(`Updated product: ${name}`, 'success');
+      this.closeAdminModal();
+      this.renderAdminView();
+    } catch (err) {
+      this.showToast(err.message, 'danger');
+    }
   }
 
-  deleteProductAction(id) {
-    const product = getProductById(id);
+  async deleteProductAction(id) {
+    const product = await getProductById(id);
     if (!product) return;
 
     if (confirm(`Are you sure you want to remove '${product.name}' from the shop catalog?`)) {
-      deleteProduct(id);
-      this.showToast(`Product '${product.name}' deleted.`, 'warning');
-      this.renderAdminView();
+      try {
+        await deleteProduct(id);
+        this.showToast(`Product '${product.name}' deleted.`, 'warning');
+        this.renderAdminView();
+      } catch (err) {
+        this.showToast(err.message, 'danger');
+      }
     }
   }
 
