@@ -1,5 +1,15 @@
 // components.js - Dynamic UI rendering component templates
 
+// Currency formatter for Indian Rupees
+function formatPrice(price) {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(price);
+}
+
 // Helper: Generates star ratings
 function generateStarsHTML(rating) {
   const fullStars = Math.floor(rating);
@@ -49,7 +59,7 @@ function renderProductGrid(products) {
           <h3 class="product-card-title">${product.name}</h3>
           <p class="product-card-desc">${product.description}</p>
           <div class="product-card-footer">
-            <span class="product-card-price">${product.price.toFixed(2)}</span>
+            <span class="product-card-price">${formatPrice(product.price)}</span>
             <button class="btn-add-cart" 
                     onclick="event.stopPropagation(); app.addToCart('${product.id}', 1)"
                     title="Add to Cart"
@@ -111,7 +121,7 @@ function renderProductDetails(product, currentCartQuantity = 0) {
           <span style="color:var(--text-dim); font-size:0.9rem;">${product.rating} / 5.0 (${product.reviewsCount} customer reviews)</span>
         </div>
 
-        <div class="detail-price">${product.price.toFixed(2)}</div>
+        <div class="detail-price">${formatPrice(product.price)}</div>
         
         <p class="detail-desc">${product.description}</p>
         
@@ -186,7 +196,7 @@ function renderCart(cartItems) {
           </button>
         </div>
         <div class="cart-item-actions">
-          <div class="cart-item-price">${(item.price * item.quantity).toFixed(2)}</div>
+          <div class="cart-item-price">${formatPrice(item.price * item.quantity)}</div>
           <div class="quantity-controller">
             <button class="qty-btn" onclick="app.updateCartQty('${item.productId}', ${item.quantity - 1})">-</button>
             <span class="qty-val">${item.quantity}</span>
@@ -206,7 +216,7 @@ function renderCheckout(cartItems, subtotal, discount, tax, total) {
         <span class="checkout-item-qty">${item.quantity}x</span>
         <span>${item.name}</span>
       </div>
-      <span>$${(item.price * item.quantity).toFixed(2)}</span>
+      <span>${formatPrice(item.price * item.quantity)}</span>
     </div>
   `).join('');
 
@@ -345,7 +355,7 @@ function renderCheckout(cartItems, subtotal, discount, tax, total) {
             </div>
           </div>
           
-          <button type="submit" class="btn-checkout" style="margin-top: 1rem;">Complete Purchase ($${total.toFixed(2)})</button>
+          <button type="submit" class="btn-checkout" style="margin-top: 1rem;">Complete Purchase (${formatPrice(total)})</button>
         </form>
         
         <!-- Summary Sidebar -->
@@ -363,17 +373,17 @@ function renderCheckout(cartItems, subtotal, discount, tax, total) {
             
             <div class="cart-summary-line">
               <span>Subtotal</span>
-              <span>$${subtotal.toFixed(2)}</span>
+              <span>${formatPrice(subtotal)}</span>
             </div>
             ${discount > 0 ? `
               <div class="cart-summary-line" style="color:var(--clr-accent-2);">
                 <span>Discount (GLOW20 -20%)</span>
-                <span>-$${discount.toFixed(2)}</span>
+                <span>${formatPrice(-discount)}</span>
               </div>
             ` : ''}
             <div class="cart-summary-line">
               <span>Estimated Tax (8%)</span>
-              <span>$${tax.toFixed(2)}</span>
+              <span>${formatPrice(tax)}</span>
             </div>
             <div class="cart-summary-line">
               <span>Shipping</span>
@@ -381,7 +391,7 @@ function renderCheckout(cartItems, subtotal, discount, tax, total) {
             </div>
             <div class="cart-total-line">
               <span>Total</span>
-              <span>$${total.toFixed(2)}</span>
+              <span>${formatPrice(total)}</span>
             </div>
           </div>
         </div>
@@ -395,7 +405,7 @@ function renderOrderSuccess(order) {
   const itemsHTML = order.items.map(item => `
     <div class="receipt-row">
       <span>${item.quantity}x ${item.name}</span>
-      <span>$${(item.price * item.quantity).toFixed(2)}</span>
+      <span>${formatPrice(item.price * item.quantity)}</span>
     </div>
   `).join('');
 
@@ -415,21 +425,21 @@ function renderOrderSuccess(order) {
         ${itemsHTML}
         <div class="receipt-row" style="margin-top:0.8rem; border-top:1px solid rgba(255,255,255,0.06); padding-top:0.5rem;">
           <span>Subtotal</span>
-          <span>$${order.totals.subtotal.toFixed(2)}</span>
+          <span>${formatPrice(order.totals.subtotal)}</span>
         </div>
         ${order.totals.discount > 0 ? `
         <div class="receipt-row" style="color:var(--clr-accent-2);">
           <span>Discount (20% Off)</span>
-          <span>-$${order.totals.discount.toFixed(2)}</span>
+          <span>${formatPrice(-order.totals.discount)}</span>
         </div>
         ` : ''}
         <div class="receipt-row">
           <span>Sales Tax</span>
-          <span>$${order.totals.tax.toFixed(2)}</span>
+          <span>${formatPrice(order.totals.tax)}</span>
         </div>
         <div class="receipt-row total">
           <span>Paid Amount</span>
-          <span>$${order.totals.total.toFixed(2)}</span>
+          <span>${formatPrice(order.totals.total)}</span>
         </div>
       </div>
       
@@ -468,7 +478,7 @@ function renderOrders(orders) {
         const itemsHTML = order.items.map(item => `
           <div class="order-item-row">
             <span>${item.quantity}x ${item.name}</span>
-            <span>$${(item.price * item.quantity).toFixed(2)}</span>
+            <span>${formatPrice(item.price * item.quantity)}</span>
           </div>
         `).join('');
 
@@ -486,7 +496,7 @@ function renderOrders(orders) {
               ${itemsHTML}
               <div class="order-item-row" style="margin-top:0.8rem; border-top:1px dashed rgba(255,255,255,0.06); padding-top:0.8rem; font-weight:700;">
                 <span>Total Paid</span>
-                <span style="color:var(--clr-accent-1); font-size:1.1rem;">$${order.totals.total.toFixed(2)}</span>
+                <span style="color:var(--clr-accent-1); font-size:1.1rem;">${formatPrice(order.totals.total)}</span>
               </div>
             </div>
 
@@ -527,7 +537,7 @@ function renderAdminDashboard(products, stats) {
     <tr>
       <td><img class="admin-table-img" src="${p.image}" alt=""></td>
       <td style="font-weight:600;">${p.name}</td>
-      <td style="color:var(--clr-accent-1); font-weight:600;">$${p.price.toFixed(2)}</td>
+      <td style="color:var(--clr-accent-1); font-weight:600;">${formatPrice(p.price)}</td>
       <td><span class="category-tab active" style="font-size:0.75rem; padding: 0.2rem 0.6rem;">${p.category}</span></td>
       <td>
         <span style="font-weight:600; color: ${p.stock <= 4 ? 'var(--clr-warning)' : 'var(--text-main)'}">
@@ -571,7 +581,7 @@ function renderAdminDashboard(products, stats) {
         <div class="stat-card glass">
           <div class="stat-info">
             <span class="stat-label">Total Revenue</span>
-            <span class="stat-val">$${stats.revenue.toFixed(2)}</span>
+            <span class="stat-val">${formatPrice(stats.revenue)}</span>
           </div>
           <div class="stat-icon sales">
             <svg viewBox="0 0 24 24">
