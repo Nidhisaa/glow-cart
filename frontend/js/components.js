@@ -425,7 +425,7 @@ function renderOrderSuccess(order) {
         ${itemsHTML}
         <div class="receipt-row" style="margin-top:0.8rem; border-top:1px solid rgba(255,255,255,0.06); padding-top:0.5rem;">
           <span>Subtotal</span>
-          <span>$${order.totals.subtotal.toFixed(2)}</span>
+          <span>${formatPrice(order.totals.subtotal)}</span>
         </div>
         ${order.totals.discount > 0 ? `
         <div class="receipt-row" style="color:var(--clr-accent-2);">

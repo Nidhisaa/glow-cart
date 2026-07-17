@@ -1,5 +1,15 @@
 // frontend/js/app.js - Central State Controller and Interactive Routing (Full-Stack Version)
 
+// Currency formatter for Indian Rupees
+function formatPrice(price) {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(price);
+}
+
 class GlowCartApp {
   constructor() {
     this.state = {
@@ -360,6 +370,13 @@ class GlowCartApp {
 
   // Cart Operations
   async addToCart(productId, quantity) {
+    // Require login to add to cart
+    if (!this.state.user) {
+      this.showToast('Please login to add items to cart', 'warning');
+      this.openAuthModal('login');
+      return;
+    }
+
     const product = await getProductById(productId);
     if (!product) return;
 
@@ -466,13 +483,13 @@ class GlowCartApp {
     const discountRow = document.getElementById('cart-drawer-discount-row');
     const discountEl = document.getElementById('cart-drawer-discount');
 
-    if (subtotalEl) subtotalEl.innerText = `$${totals.subtotal.toFixed(2)}`;
-    if (taxEl) taxEl.innerText = `$${totals.tax.toFixed(2)}`;
-    if (totalEl) totalEl.innerText = `$${totals.total.toFixed(2)}`;
+    if (subtotalEl) subtotalEl.innerText = formatPrice(totals.subtotal);
+    if (taxEl) taxEl.innerText = formatPrice(totals.tax);
+    if (totalEl) totalEl.innerText = formatPrice(totals.total);
     
     if (discountRow && discountEl) {
       if (totals.discount > 0) {
-        discountEl.innerText = `-$${totals.discount.toFixed(2)}`;
+        discountEl.innerText = formatPrice(-totals.discount);
         discountRow.style.display = 'flex';
       } else {
         discountRow.style.display = 'none';
