@@ -1,5 +1,15 @@
 // components.js - Dynamic UI rendering component templates
 
+// Currency formatter for Indian Rupees
+function formatPrice(price) {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(price);
+}
+
 // Helper: Generates star ratings
 function generateStarsHTML(rating) {
   const fullStars = Math.floor(rating);
@@ -49,7 +59,7 @@ function renderProductGrid(products) {
           <h3 class="product-card-title">${product.name}</h3>
           <p class="product-card-desc">${product.description}</p>
           <div class="product-card-footer">
-            <span class="product-card-price">${product.price.toFixed(2)}</span>
+            <span class="product-card-price">${formatPrice(product.price)}</span>
             <button class="btn-add-cart" 
                     onclick="event.stopPropagation(); app.addToCart('${product.id}', 1)"
                     title="Add to Cart"
