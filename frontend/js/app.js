@@ -47,7 +47,11 @@ class GlowCartApp {
   restoreUser() {
     const saved = localStorage.getItem('glowcart_user');
     if (saved) {
-      this.state.user = JSON.parse(saved);
+      try {
+        this.state.user = JSON.parse(saved);
+      } catch {
+        localStorage.removeItem('glowcart_user');
+      }
       this.updateNavbarAuthUI();
     }
   }
@@ -239,11 +243,13 @@ class GlowCartApp {
     mainContent.innerHTML = '<div style="text-align:center; padding:3rem; color:var(--text-dim);">Fetching Order History...</div>';
     
     // Fetch orders from API
-    const userEmail = this.state.user ? this.state.user.email : 'guest';
-    const role = this.state.user ? this.state.user.role : 'user';
+    if (!this.state.user) {
+      mainContent.innerHTML = '<div style="text-align:center; padding:3rem; color:var(--text-dim);">Please sign in to view your orders.</div>';
+      return;
+    }
     
     try {
-      const response = await fetch(`/api/orders?email=${userEmail}&role=${role}`);
+      const response = await apiRequest('/api/orders');
       if (!response.ok) throw new Error('Failed to fetch orders');
       const orders = await response.json();
       mainContent.innerHTML = renderOrders(orders);
@@ -261,8 +267,7 @@ class GlowCartApp {
 
     try {
       // Fetch all orders to compute stats
-      const userEmail = this.state.user ? this.state.user.email : '';
-      const response = await fetch(`/api/orders?email=${userEmail}&role=admin`);
+      const response = await apiRequest('/api/orders');
       if (!response.ok) throw new Error('Failed to fetch admin metrics');
       const orders = await response.json();
 
@@ -588,12 +593,16 @@ class GlowCartApp {
     };
 
     try {
-      const response = await fetch('/api/orders', {
+      const response = await apiRequest('/api/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(newOrder)
+        body: JSON.stringify({
+          items: this.state.cart,
+          promoCode: this.state.promoApplied ? 'GLOW20' : undefined,
+          shippingDetails: newOrder.shippingDetails
+        })
       });
 
       if (!response.ok) throw new Error('Failed to record transaction');
@@ -606,8 +615,9 @@ class GlowCartApp {
       this.showToast('Payment Authorized. Order placed!', 'success');
 
       // Route to receipt success screen
+      const order = await response.json();
       const mainContent = document.getElementById('main-content');
-      mainContent.innerHTML = renderOrderSuccess(newOrder);
+      mainContent.innerHTML = renderOrderSuccess(order);
     } catch (error) {
       this.showToast(`Checkout Error: ${error.message}`, 'danger');
     }
@@ -619,11 +629,10 @@ class GlowCartApp {
       // If user is currently looking at their orders list, pull new status from server
       if (this.state.view === 'orders') {
         const mainContent = document.getElementById('main-content');
-        const userEmail = this.state.user ? this.state.user.email : 'guest';
-        const role = this.state.user ? this.state.user.role : 'user';
+        if (!this.state.user) return;
 
         try {
-          const response = await fetch(`/api/orders?email=${userEmail}&role=${role}`);
+          const response = await apiRequest('/api/orders');
           if (response.ok) {
             const orders = await response.json();
             // Don't redraw entire screen if user is scrolling, but this is a demo, so updating is clean

@@ -4,13 +4,47 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const db = require('./db');
+const {
+  createToken,
+  getBearerToken,
+  hashPassword,
+  verifyPassword,
+  verifyToken
+} = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Enable CORS and JSON parsing middlewares
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
+
+function requireAuth(req, res, next) {
+  const user = verifyToken(getBearerToken(req));
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+  req.user = user;
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Administrator access required' });
+  next();
+}
+
+function validateProduct(body) {
+  return body && typeof body.name === 'string' && body.name.trim().length >= 2 &&
+    typeof body.description === 'string' && body.description.trim().length >= 5 &&
+    typeof body.category === 'string' && body.category.trim() &&
+    Number.isFinite(Number(body.price)) && Number(body.price) > 0 &&
+    typeof body.image === 'string' && body.image.trim() &&
+    Number.isInteger(Number(body.stock)) && Number(body.stock) >= 0;
+}
+
+function validateRegistration(body) {
+  return body && typeof body.name === 'string' && body.name.trim().length >= 2 &&
+    typeof body.email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email) &&
+    typeof body.password === 'string' && body.password.length >= 6;
+}
 
 // Serve static frontend assets
 app.use(express.static(path.join(__dirname, '../frontend')));
@@ -41,8 +75,9 @@ app.get('/api/products/:id', async (req, res) => {
 });
 
 // Admin: Add new product
-app.post('/api/products', async (req, res) => {
+app.post('/api/products', requireAuth, requireAdmin, async (req, res) => {
   try {
+    if (!validateProduct(req.body)) return res.status(400).json({ error: 'Invalid product fields' });
     const newProduct = await db.addProduct(req.body);
     res.status(201).json(newProduct);
   } catch (error) {
@@ -51,8 +86,9 @@ app.post('/api/products', async (req, res) => {
 });
 
 // Admin: Update product details
-app.put('/api/products/:id', async (req, res) => {
+app.put('/api/products/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
+    if (!validateProduct(req.body)) return res.status(400).json({ error: 'Invalid product fields' });
     const updated = await db.updateProduct(req.params.id, req.body);
     if (!updated) return res.status(404).json({ error: 'Product not found' });
     res.json(updated);
@@ -62,7 +98,7 @@ app.put('/api/products/:id', async (req, res) => {
 });
 
 // Admin: Delete product from catalog
-app.delete('/api/products/:id', async (req, res) => {
+app.delete('/api/products/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     await db.deleteProduct(req.params.id);
     res.json({ success: true, message: 'Product deleted' });
@@ -77,14 +113,20 @@ app.delete('/api/products/:id', async (req, res) => {
 
 // Handle login
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
+  const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const password = typeof req.body.password === 'string' ? req.body.password : '';
   try {
     const user = await db.getUserByEmail(email);
-    if (!user || user.password !== password) {
+    const valid = user && await verifyPassword(password, user.password);
+    if (!valid) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    if (!user.password.startsWith('scrypt:')) {
+      await db.updateUserPassword(email, await hashPassword(password));
     }
     // Return user session object (excluding password for security)
     res.json({
+      token: createToken(user),
       email: user.email,
       role: user.role,
       name: user.name
@@ -98,12 +140,15 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, name } = req.body;
   try {
-    const existing = await db.getUserByEmail(email);
+    if (!validateRegistration(req.body)) return res.status(400).json({ error: 'Name, valid email, and a 6-character password are required' });
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = await db.getUserByEmail(normalizedEmail);
     if (existing) {
       return res.status(400).json({ error: 'Email address already registered' });
     }
-    const newUser = await db.createUser({ email, password, name, role: 'user' });
+    const newUser = await db.createUser({ email: normalizedEmail, password, name: name.trim(), role: 'user' });
     res.status(201).json({
+      token: createToken(newUser),
       email: newUser.email,
       role: newUser.role,
       name: newUser.name
@@ -118,15 +163,13 @@ app.post('/api/auth/register', async (req, res) => {
 // ----------------------------------------------------
 
 // Retrieve customer orders list
-app.get('/api/orders', async (req, res) => {
-  const { email, role } = req.query;
+app.get('/api/orders', requireAuth, async (req, res) => {
   try {
-    if (role === 'admin') {
+    if (req.user.role === 'admin') {
       const allOrders = await db.getAdminAllOrders();
       return res.json(allOrders);
     }
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-    const orders = await db.getOrders(email);
+    const orders = await db.getOrders(req.user.email);
     res.json(orders);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -134,10 +177,19 @@ app.get('/api/orders', async (req, res) => {
 });
 
 // Submit checkout order
-app.post('/api/orders', async (req, res) => {
+app.post('/api/orders', requireAuth, async (req, res) => {
   try {
-    await db.createOrder(req.body);
-    res.status(201).json({ success: true, message: 'Order created successfully' });
+    if (!req.body.shippingDetails || !Array.isArray(req.body.items)) {
+      return res.status(400).json({ error: 'Shipping details and items are required' });
+    }
+    const order = await db.createOrder({
+      id: `GC-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      userEmail: req.user.email,
+      items: req.body.items,
+      promoCode: req.body.promoCode,
+      shippingDetails: req.body.shippingDetails
+    });
+    res.status(201).json(order);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

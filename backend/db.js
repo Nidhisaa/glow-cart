@@ -3,6 +3,7 @@
 const mysql = require('mysql2/promise');
 const fs = require('fs').promises;
 const path = require('path');
+const { hashPassword } = require('./auth');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 // Read DB Configuration from Environment variables
@@ -12,6 +13,16 @@ const dbPassword = process.env.DB_PASSWORD || 'Nidhi@20';
 const dbName = process.env.DB_NAME || 'glowcart_db';
 
 let pool;
+
+function parseJson(value, fallback) {
+  if (value && typeof value === 'object') return value;
+  if (typeof value !== 'string') return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
 
 async function initDB() {
   try {
@@ -43,25 +54,24 @@ async function initDB() {
 
     console.log(`Connection pool created for database "${dbName}".`);
 
-    // 4. Check if tables exist. If products table is missing, initialize schema and seed data
+    // 4. Create any missing tables, then seed an empty catalog.
     const [tables] = await pool.query(`SHOW TABLES LIKE 'products'`);
+    const schemaPath = path.join(__dirname, '../db/schema.sql');
+    const schemaSQL = await fs.readFile(schemaPath, 'utf-8');
+    await pool.query(schemaSQL);
     if (tables.length === 0) {
       console.log('Tables not found. Initializing database schema...');
-      
-      const schemaPath = path.join(__dirname, '../db/schema.sql');
       const seedPath = path.join(__dirname, '../db/seed.sql');
-
-      const schemaSQL = await fs.readFile(schemaPath, 'utf-8');
       const seedSQL = await fs.readFile(seedPath, 'utf-8');
-
-      // Execute schema creation
-      await pool.query(schemaSQL);
-      console.log('Database tables created successfully.');
-
-      // Execute seed insertion
       await pool.query(seedSQL);
       console.log('Seed data inserted successfully.');
     } else {
+      const [products] = await pool.query('SELECT COUNT(*) AS count FROM products');
+      if (products[0].count === 0) {
+        const seedPath = path.join(__dirname, '../db/seed.sql');
+        await pool.query(await fs.readFile(seedPath, 'utf-8'));
+        console.log('Seed data inserted successfully.');
+      }
       console.log('Database tables verified.');
     }
   } catch (error) {
@@ -80,7 +90,9 @@ async function getProducts() {
   // Return specs parsed back to JS object
   return rows.map(p => ({
     ...p,
-    specs: typeof p.specs === 'string' ? JSON.parse(p.specs) : p.specs
+    price: Number(p.price),
+    rating: Number(p.rating),
+    specs: parseJson(p.specs, {})
   }));
 }
 
@@ -90,7 +102,9 @@ async function getProductById(id) {
   const p = rows[0];
   return {
     ...p,
-    specs: typeof p.specs === 'string' ? JSON.parse(p.specs) : p.specs
+    price: Number(p.price),
+    rating: Number(p.rating),
+    specs: parseJson(p.specs, {})
   };
 }
 
@@ -102,7 +116,7 @@ async function addProduct(p) {
 
   await pool.query(
     'INSERT INTO products (id, name, description, category, price, image, rating, reviewsCount, stock, specs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [nextId, p.name, p.description, p.category, p.price, p.image, p.rating || 5.0, p.reviewsCount || 0, p.stock || 0, specsStr]
+    [nextId, p.name, p.description, p.category, p.price, p.image, p.rating || 5.0, p.reviewsCount || 0, p.stock, specsStr]
   );
   return { ...p, id: nextId };
 }
@@ -128,11 +142,16 @@ async function getUserByEmail(email) {
 }
 
 async function createUser(u) {
+  const passwordHash = await hashPassword(u.password);
   await pool.query(
     'INSERT INTO users (email, password, role, name) VALUES (?, ?, ?, ?)',
-    [u.email, u.password, u.role || 'user', u.name]
+    [u.email, passwordHash, u.role || 'user', u.name]
   );
   return getUserByEmail(u.email);
+}
+
+async function updateUserPassword(email, passwordHash) {
+  await pool.query('UPDATE users SET password = ? WHERE email = ?', [passwordHash, email]);
 }
 
 // Orders and Tracking
@@ -154,7 +173,7 @@ async function getOrders(userEmail) {
         tax: parseFloat(order.tax),
         total: parseFloat(order.total)
       },
-      shippingDetails: typeof order.shipping_details === 'string' ? JSON.parse(order.shipping_details) : order.shipping_details,
+      shippingDetails: parseJson(order.shipping_details, {}),
       items: items.map(it => ({
         productId: it.product_id,
         name: it.name,
@@ -183,7 +202,7 @@ async function getAdminAllOrders() {
         tax: parseFloat(order.tax),
         total: parseFloat(order.total)
       },
-      shippingDetails: typeof order.shipping_details === 'string' ? JSON.parse(order.shipping_details) : order.shipping_details,
+      shippingDetails: parseJson(order.shipping_details, {}),
       items: items.map(it => ({
         productId: it.product_id,
         name: it.name,
@@ -203,14 +222,42 @@ async function createOrder(o) {
   try {
     const shippingDetailsStr = JSON.stringify(o.shippingDetails);
     
-    // 1. Insert order record
+    if (!Array.isArray(o.items) || o.items.length === 0) {
+      throw new Error('Order must contain at least one item');
+    }
+
+    const productIds = [...new Set(o.items.map(item => item.productId))];
+    const placeholders = productIds.map(() => '?').join(',');
+    const [products] = await connection.query(
+      `SELECT id, name, price, stock FROM products WHERE id IN (${placeholders}) FOR UPDATE`,
+      productIds
+    );
+    const productsById = new Map(products.map(product => [String(product.id), product]));
+    let subtotal = 0;
+    const normalizedItems = o.items.map(item => {
+      const product = productsById.get(String(item.productId));
+      const quantity = Number(item.quantity);
+      if (!product || !Number.isInteger(quantity) || quantity < 1) {
+        throw new Error('Invalid order item');
+      }
+      if (quantity > product.stock) {
+        throw new Error(`${product.name} has only ${product.stock} item(s) left`);
+      }
+      subtotal += Number(product.price) * quantity;
+      return { productId: product.id, name: product.name, price: product.price, quantity };
+    });
+    const discount = o.promoCode === 'GLOW20' ? subtotal * 0.20 : 0;
+    const tax = (subtotal - discount) * 0.08;
+    const total = subtotal - discount + tax;
+
+    // Insert order record using server-calculated totals.
     await connection.query(
       'INSERT INTO orders (id, user_email, subtotal, discount, tax, total, status, shipping_details) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [o.id, o.userEmail, o.totals.subtotal, o.totals.discount, o.totals.tax, o.totals.total, o.status || 'Processing', shippingDetailsStr]
+      [o.id, o.userEmail, subtotal, discount, tax, total, 'Processing', shippingDetailsStr]
     );
 
     // 2. Insert order items & reduce product stocks
-    for (const item of o.items) {
+    for (const item of normalizedItems) {
       await connection.query(
         'INSERT INTO order_items (order_id, product_id, name, price, quantity) VALUES (?, ?, ?, ?, ?)',
         [o.id, item.productId, item.name, item.price, item.quantity]
@@ -225,6 +272,14 @@ async function createOrder(o) {
 
     await connection.commit();
     console.log(`Transaction committed for Order ID #${o.id}`);
+    return {
+      id: o.id,
+      userEmail: o.userEmail,
+      status: 'Processing',
+      totals: { subtotal, discount, tax, total },
+      shippingDetails: o.shippingDetails,
+      items: normalizedItems
+    };
   } catch (error) {
     await connection.rollback();
     console.error('Failed to place order in transaction:', error.message);
@@ -247,6 +302,7 @@ module.exports = {
   deleteProduct,
   getUserByEmail,
   createUser,
+  updateUserPassword,
   getOrders,
   getAdminAllOrders,
   createOrder,
