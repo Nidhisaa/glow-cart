@@ -890,7 +890,10 @@ class GlowCartApp {
                       <option value="Keyboards" style="background:#120e24;">Keyboards</option>
                       <option value="Audio" style="background:#120e24;">Audio</option>
                       <option value="Wearables" style="background:#120e24;">Wearables</option>
-                      <option value="Smart Home" style="background:#120e24;">Smart Home</option>
+                      <option value="Mobiles" style="background:#120e24;">Mobiles</option>
+                      <option value="Laptops" style="background:#120e24;">Laptops</option>
+                      <option value="Gaming Tools" style="background:#120e24;">Gaming Tools</option>
+                      <option value="Tech Tools" style="background:#120e24;">Tech Tools</option>
                     </select>
                   </div>
                 </div>
@@ -957,7 +960,10 @@ class GlowCartApp {
                       <option value="Keyboards" ${product.category === 'Keyboards' ? 'selected' : ''} style="background:#120e24;">Keyboards</option>
                       <option value="Audio" ${product.category === 'Audio' ? 'selected' : ''} style="background:#120e24;">Audio</option>
                       <option value="Wearables" ${product.category === 'Wearables' ? 'selected' : ''} style="background:#120e24;">Wearables</option>
-                      <option value="Smart Home" ${product.category === 'Smart Home' ? 'selected' : ''} style="background:#120e24;">Smart Home</option>
+                      <option value="Mobiles" ${product.category === 'Mobiles' ? 'selected' : ''} style="background:#120e24;">Mobiles</option>
+                      <option value="Laptops" ${product.category === 'Laptops' ? 'selected' : ''} style="background:#120e24;">Laptops</option>
+                      <option value="Gaming Tools" ${product.category === 'Gaming Tools' ? 'selected' : ''} style="background:#120e24;">Gaming Tools</option>
+                      <option value="Tech Tools" ${product.category === 'Tech Tools' ? 'selected' : ''} style="background:#120e24;">Tech Tools</option>
                     </select>
                   </div>
                 </div>

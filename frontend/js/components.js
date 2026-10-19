@@ -48,7 +48,7 @@ function renderProductGrid(products) {
     return `
       <div class="product-card glass" onclick="app.viewProductDetails('${product.id}')">
         <div class="product-image-container">
-          <img src="${product.image}" alt="${product.name}" loading="lazy">
+          <img src="${product.image}" alt="${product.name}" loading="lazy" onerror="this.onerror=null;this.src='assets/hero_banner.jpg'">
           <span class="product-category-tag">${product.category}</span>
         </div>
         <div class="product-card-body">
@@ -109,7 +109,7 @@ function renderProductDetails(product, currentCartQuantity = 0) {
           Back to Shop
         </button>
         <div class="detail-img-container">
-          <img src="${product.image}" alt="${product.name}">
+          <img src="${product.image}" alt="${product.name}" onerror="this.onerror=null;this.src='assets/hero_banner.jpg'">
         </div>
       </div>
       <div class="detail-info">
@@ -185,7 +185,7 @@ function renderCart(cartItems) {
 
   return cartItems.map(item => `
     <div class="cart-item">
-      <img class="cart-item-img" src="${item.image}" alt="${item.name}">
+      <img class="cart-item-img" src="${item.image}" alt="${item.name}" onerror="this.onerror=null;this.src='assets/hero_banner.jpg'">
       <div class="cart-item-details">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
           <div class="cart-item-name" title="${item.name}">${item.name}</div>
@@ -535,7 +535,7 @@ function renderOrders(orders) {
 function renderAdminDashboard(products, stats) {
   const tableRowsHTML = products.map(p => `
     <tr>
-      <td><img class="admin-table-img" src="${p.image}" alt=""></td>
+      <td><img class="admin-table-img" src="${p.image}" alt="" onerror="this.onerror=null;this.src='assets/hero_banner.jpg'"></td>
       <td style="font-weight:600;">${p.name}</td>
       <td style="color:var(--clr-accent-1); font-weight:600;">${formatPrice(p.price)}</td>
       <td><span class="category-tab active" style="font-size:0.75rem; padding: 0.2rem 0.6rem;">${p.category}</span></td>

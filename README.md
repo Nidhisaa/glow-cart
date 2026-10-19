@@ -98,3 +98,57 @@ To login directly from the modal, use the quick credentials helpers at the botto
 * **Admin Dashboard Account**:
   * Email: `admin@glowcart.com`
   * Password: `admin123`
+
+## 🧠 Interview-Ready Architecture
+
+GlowCart is intentionally split into four layers:
+
+1. **Presentation layer** — [`frontend/index.html`](frontend/index.html) defines the SPA shell. [`frontend/js/components.js`](frontend/js/components.js) renders reusable HTML templates, while [`frontend/js/app.js`](frontend/js/app.js) owns navigation, cart state, authentication state, and checkout events.
+2. **API/client layer** — [`frontend/js/products.js`](frontend/js/products.js) contains the browser's API client. It adds the signed bearer token to protected requests and keeps network errors separate from rendering code.
+3. **Application/API layer** — [`backend/server.js`](backend/server.js) exposes REST endpoints, validates input, authenticates requests, and enforces the admin role. The browser never decides which email or role is trusted.
+4. **Persistence layer** — [`backend/db.js`](backend/db.js) owns SQL access and transactions. [`db/schema.sql`](db/schema.sql) defines relational tables and [`db/seed.sql`](db/seed.sql) provides demo data.
+
+### Authentication flow
+
+Login verifies the password with `crypto.scrypt`, then returns a signed token. The token contains the user's email and role and is sent as:
+
+```text
+Authorization: Bearer <token>
+```
+
+The server verifies the signature on every protected request. Passwords are not returned to the browser. Existing plain-text demo passwords are upgraded to hashes after their first successful login so the demo remains usable.
+
+This is a lightweight demonstration session mechanism. In production, use a long random `AUTH_SECRET`, HTTPS, short token expiry/refresh tokens, rate limiting, and an established identity provider or carefully reviewed session library.
+
+### Checkout consistency
+
+The checkout request contains only product IDs, quantities, promo code, and shipping details. The server:
+
+1. Starts a MySQL transaction.
+2. Locks the requested product rows with `FOR UPDATE`.
+3. Re-reads prices and stock from the database.
+4. Rejects invalid quantities or insufficient stock.
+5. Calculates subtotal, discount, tax, and total.
+6. Inserts the order and line items.
+7. Decrements stock.
+8. Commits everything, or rolls back everything on failure.
+
+This prevents a client from changing prices and prevents two concurrent checkouts from selling the same stock.
+
+### Useful API examples
+
+```bash
+# Public catalog
+curl http://localhost:5000/api/products
+
+# Login
+curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"user@glowcart.com\",\"password\":\"user123\"}"
+
+# Authenticated orders
+curl http://localhost:5000/api/orders \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+For an interview, be ready to explain why authorization is enforced on the server, why client totals are untrusted, why stock updates belong in a transaction, and why passwords require salted one-way hashing.

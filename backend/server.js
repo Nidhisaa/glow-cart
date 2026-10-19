@@ -191,7 +191,8 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     });
     res.status(201).json(order);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    const isClientError = /Invalid order item|only \d+ item|Shipping details/.test(error.message);
+    res.status(isClientError ? 400 : 500).json({ error: error.message });
   }
 });
 
